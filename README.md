@@ -12,20 +12,19 @@ A terminal user interface for editing ID3v2 metadata tags on MP3 files.
 ## Requirements
 
 - Go 1.25+
-- `id3v2` command-line tool (for reading/writing ID3 tags)
-- `ffmpeg` (optional, for embedding cover art)
+- `ffmpeg` (includes ffprobe, for reading metadata and embedding cover art)
 
 ### Installing Dependencies
 
 ```bash
 # archlinux
-pacman -S id3v2 ffmpeg
+pacman -S ffmpeg
 
 # On Debian/Ubuntu
-sudo apt install id3v2 ffmpeg
+sudo apt install ffmpeg
 
 # On macOS
-brew install id3v2 ffmpeg
+brew install ffmpeg
 ```
 
 ## Build

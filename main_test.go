@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/bogem/id3v2"
 )
 
 const testFile = "test/test.mp3"
@@ -16,15 +18,37 @@ func setupTestFile(t *testing.T) {
 	}
 }
 
-func clearMetadata(_ *testing.T) {
-	exec.Command("id3v2", "--delete-all", testFile).Run()
+func clearMetadata(t *testing.T) {
+	tag, err := id3v2.Open(testFile, id3v2.Options{Parse: true})
+	if err != nil {
+		t.Logf("warning: failed to open file for clearing: %v", err)
+		return
+	}
+	defer tag.Close()
+	tag.DeleteAllFrames()
+	if err := tag.Save(); err != nil {
+		t.Logf("warning: failed to save cleared metadata: %v", err)
+	}
+}
+
+func setTestMetadata(t *testing.T, title, artist, album string) {
+	tag, err := id3v2.Open(testFile, id3v2.Options{Parse: true})
+	if err != nil {
+		t.Fatalf("failed to open file: %v", err)
+	}
+	defer tag.Close()
+	tag.SetTitle(title)
+	tag.SetArtist(artist)
+	tag.SetAlbum(album)
+	if err := tag.Save(); err != nil {
+		t.Fatalf("failed to save metadata: %v", err)
+	}
 }
 
 func TestReadMetadata(t *testing.T) {
 	setupTestFile(t)
 	clearMetadata(t)
-
-	exec.Command("id3v2", "-t", "Test Song", "-a", "Test Artist", "-A", "Test Album", testFile).Run()
+	setTestMetadata(t, "Test Song", "Test Artist", "Test Album")
 
 	app := &App{}
 	err := app.readMetadata(testFile)
@@ -121,103 +145,80 @@ func TestLoadFiles(t *testing.T) {
 	_ = app
 }
 
-func TestParseId3v2Output(t *testing.T) {
+func TestParseFfprobeOutput(t *testing.T) {
 	tests := []struct {
 		name     string
-		output   string
+		jsonStr  string
 		expected Metadata
 	}{
 		{
-			name:   "single line TIT2",
-			output: "TIT2: My Song Title",
+			name: "basic metadata",
+			jsonStr: `{
+				"format": {
+					"tags": {
+						"title": "My Song",
+						"artist": "My Artist",
+						"album": "My Album"
+					}
+				}
+			}`,
 			expected: Metadata{
-				TrackName: "My Song Title",
+				TrackName: "My Song",
+				Artist:    "My Artist",
+				Album:     "My Album",
 			},
 		},
 		{
-			name:   "single line TPE1",
-			output: "TPE1: My Artist",
+			name: "partial metadata",
+			jsonStr: `{
+				"format": {
+					"tags": {
+						"title": "Only Title"
+					}
+				}
+			}`,
 			expected: Metadata{
-				Artist: "My Artist",
+				TrackName: "Only Title",
+				Artist:    "",
+				Album:     "",
 			},
 		},
 		{
-			name:   "single line TALB",
-			output: "TALB: My Album",
+			name: "empty tags",
+			jsonStr: `{
+				"format": {
+					"tags": {}
+				}
+			}`,
 			expected: Metadata{
-				Album: "My Album",
-			},
-		},
-		{
-			name:   "multiple frames",
-			output: "TIT2: Song\nTPE1: Artist\nTALB: Album",
-			expected: Metadata{
-				TrackName: "Song",
-				Artist:    "Artist",
-				Album:     "Album",
-			},
-		},
-		{
-			name: "full id3v2 list output",
-			output: `id3v2 tag info for test.mp3:
-TIT2: Test Song
-TPE1: Test Artist
-TALB: Test Album
-TPE2: Test Album Artist
-TYER: 2024
-TRCK: 1/10
-TCON: Rock
-TDRC: 2024`,
-			expected: Metadata{
-				TrackName: "Test Song",
-				Artist:    "Test Artist",
-				Album:     "Test Album",
+				TrackName: "",
+				Artist:    "",
+				Album:     "",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := &App{}
-			lines := strings.Split(tt.output, "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if strings.Contains(line, "TIT2") {
-					if idx := strings.Index(line, ":"); idx != -1 {
-						app.metadata = &Metadata{}
-						app.metadata.TrackName = strings.TrimSpace(line[idx+1:])
-					}
-				}
-				if strings.Contains(line, "TPE1") {
-					if app.metadata == nil {
-						app.metadata = &Metadata{}
-					}
-					if idx := strings.Index(line, ":"); idx != -1 {
-						app.metadata.Artist = strings.TrimSpace(line[idx+1:])
-					}
-				}
-				if strings.Contains(line, "TALB") {
-					if app.metadata == nil {
-						app.metadata = &Metadata{}
-					}
-					if idx := strings.Index(line, ":"); idx != -1 {
-						app.metadata.Album = strings.TrimSpace(line[idx+1:])
-					}
-				}
+			var probe ffprobeOutput
+			if err := json.Unmarshal([]byte(tt.jsonStr), &probe); err != nil {
+				t.Fatalf("failed to parse JSON: %v", err)
 			}
 
-			if app.metadata == nil {
-				app.metadata = &Metadata{}
+			result := Metadata{
+				TrackName: probe.Format.Tags.Title,
+				Artist:    probe.Format.Tags.Artist,
+				Album:     probe.Format.Tags.Album,
 			}
 
-			if app.metadata.TrackName != tt.expected.TrackName {
-				t.Errorf("TrackName: expected '%s', got '%s'", tt.expected.TrackName, app.metadata.TrackName)
+			if result.TrackName != tt.expected.TrackName {
+				t.Errorf("TrackName: expected '%s', got '%s'", tt.expected.TrackName, result.TrackName)
 			}
-			if app.metadata.Artist != tt.expected.Artist {
-				t.Errorf("Artist: expected '%s', got '%s'", tt.expected.Artist, app.metadata.Artist)
+			if result.Artist != tt.expected.Artist {
+				t.Errorf("Artist: expected '%s', got '%s'", tt.expected.Artist, result.Artist)
 			}
-			if app.metadata.Album != tt.expected.Album {
-				t.Errorf("Album: expected '%s', got '%s'", tt.expected.Album, app.metadata.Album)
+			if result.Album != tt.expected.Album {
+				t.Errorf("Album: expected '%s', got '%s'", tt.expected.Album, result.Album)
 			}
 		})
 	}

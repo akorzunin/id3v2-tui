@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/bogem/id3v2"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -45,67 +47,73 @@ func (a *App) runCommand(name string, args ...string) (string, error) {
 	return string(output), nil
 }
 
+type ffprobeFormat struct {
+	Tags struct {
+		Title  string `json:"title"`
+		Artist string `json:"artist"`
+		Album  string `json:"album"`
+	} `json:"tags"`
+}
+
+type ffprobeOutput struct {
+	Format ffprobeFormat `json:"format"`
+}
+
 func (a *App) readMetadata(filePath string) error {
-	output, err := a.runCommand("id3v2", "-l", filePath)
+	output, err := a.runCommand("ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", filePath)
 	if err != nil {
 		a.metadata = &Metadata{}
 		return nil
 	}
 
 	a.metadata = &Metadata{}
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.Contains(line, "TIT2") {
-			if idx := strings.Index(line, ":"); idx != -1 {
-				a.metadata.TrackName = strings.TrimSpace(line[idx+1:])
-			}
-		}
-		if strings.Contains(line, "TPE1") {
-			if idx := strings.Index(line, ":"); idx != -1 {
-				a.metadata.Artist = strings.TrimSpace(line[idx+1:])
-			}
-		}
-		if strings.Contains(line, "TALB") {
-			if idx := strings.Index(line, ":"); idx != -1 {
-				a.metadata.Album = strings.TrimSpace(line[idx+1:])
-			}
-		}
+
+	var probe ffprobeOutput
+	if err := json.Unmarshal([]byte(output), &probe); err != nil {
+		return nil
 	}
+
+	a.metadata.TrackName = probe.Format.Tags.Title
+	a.metadata.Artist = probe.Format.Tags.Artist
+	a.metadata.Album = probe.Format.Tags.Album
+
 	return nil
 }
 
 func (a *App) saveMetadata(filePath string) error {
-	if a.metadata.TrackName != "" {
-		_, err := a.runCommand("id3v2", "-t", a.metadata.TrackName, filePath)
-		if err != nil {
-			return fmt.Errorf("failed to set track name: %w", err)
-		}
-	}
-
-	if a.metadata.Artist != "" {
-		_, err := a.runCommand("id3v2", "-a", a.metadata.Artist, filePath)
-		if err != nil {
-			return fmt.Errorf("failed to set artist: %w", err)
-		}
-	}
-
-	if a.metadata.Album != "" {
-		_, err := a.runCommand("id3v2", "-A", a.metadata.Album, filePath)
-		if err != nil {
-			return fmt.Errorf("failed to set album: %w", err)
-		}
-	}
-
 	if a.metadata.CoverPath != "" {
 		_, err := a.runCommand("ffmpeg", "-i", filePath, "-i", a.metadata.CoverPath,
 			"-map", "0:0", "-map", "1:0", "-c:v", "copy", "-id3v2_version", "3",
 			"-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)",
-			"-y", filePath+".tmp.mp3")
+			"-metadata", "title="+a.metadata.TrackName,
+			"-metadata", "artist="+a.metadata.Artist,
+			"-metadata", "album="+a.metadata.Album,
+			"-c:a", "copy", "-y", filePath+".tmp.mp3")
 		if err != nil {
 			return fmt.Errorf("failed to set cover: %w", err)
 		}
 		os.Rename(filePath+".tmp.mp3", filePath)
+		return nil
+	}
+
+	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer tag.Close()
+
+	if a.metadata.TrackName != "" {
+		tag.SetTitle(a.metadata.TrackName)
+	}
+	if a.metadata.Artist != "" {
+		tag.SetArtist(a.metadata.Artist)
+	}
+	if a.metadata.Album != "" {
+		tag.SetAlbum(a.metadata.Album)
+	}
+
+	if err := tag.Save(); err != nil {
+		return fmt.Errorf("failed to save metadata: %w", err)
 	}
 
 	return nil
