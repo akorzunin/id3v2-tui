@@ -2,6 +2,8 @@
 
 A terminal user interface for editing ID3v2 metadata tags on MP3 files.
 
+<img width="1296" height="657" alt="Image" src="https://github.com/user-attachments/assets/817007e5-ee9f-4d9a-a029-cc2b5ea5d95a" />
+
 ## Features
 
 - Browse directories and select MP3 files
