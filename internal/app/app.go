@@ -122,13 +122,10 @@ func (a *App) Run(filePath string) error {
 	a.loadFiles(currentDir)
 
 	statusBar := ui.CreateStatusBar("↑↓ Navigate | Enter: Open | Tab/Shift+Tab: Cycle | Esc: Clear | q: Quit")
-	fileListWrapper := ui.CreateFileListWrapper(a.fileList)
-	formWrapper := ui.CreateFormWrapper(a.form, "Metadata Editor")
-
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
-			AddItem(fileListWrapper, 0, 1, true).
-			AddItem(formWrapper, 0, 2, false), 0, 1, true).
+			AddItem(a.fileList, 0, 1, true).
+			AddItem(a.form, 0, 2, false), 0, 1, true).
 		AddItem(statusBar, 1, 0, false)
 
 	a.fileList.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {

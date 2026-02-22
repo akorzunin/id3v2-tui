@@ -6,6 +6,8 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+
+	"id3v2-tui/internal/theme"
 )
 
 type SaveCallback func(filePath, trackName, artist, album, coverPath string) error
@@ -37,12 +39,21 @@ type UIContext struct {
 func CreateFileBrowser(ctx *UIContext) *tview.List {
 	list := tview.NewList()
 	list.SetBorder(true).SetTitle("Files")
+	list.SetMainTextColor(theme.Text)
+	list.SetSecondaryTextColor(theme.TextDim)
+	list.SetTitleColor(theme.Primary)
+	list.SetBorderColor(theme.Primary)
 	return list
 }
 
 func CreateMetadataForm(directMode bool, ctx *UIContext) *tview.Form {
 	form := tview.NewForm()
 	form.SetBorder(true).SetTitle("Metadata Editor")
+	form.SetTitleColor(theme.Secondary)
+	form.SetBorderColor(theme.Primary)
+	form.SetLabelColor(theme.TextDim)
+	form.SetFieldTextColor(theme.Text)
+	form.SetFieldBackgroundColor(theme.Secondary)
 
 	form.AddInputField("Track Name", "", 40, nil, nil)
 	form.AddInputField("Artist", "", 40, nil, nil)
@@ -89,8 +100,8 @@ func CreateMetadataForm(directMode bool, ctx *UIContext) *tview.Form {
 	})
 
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetButtonBackgroundColor(tcell.ColorDarkSlateGray)
-	form.SetButtonTextColor(tcell.ColorWhite)
+	form.SetButtonBackgroundColor(theme.Secondary)
+	form.SetButtonTextColor(theme.Text)
 
 	return form
 }
@@ -188,24 +199,25 @@ func PopulateForm(form *tview.Form, trackName, artist, album, coverPath string) 
 func CreateStatusBar(text string) *tview.TextView {
 	statusBar := tview.NewTextView().
 		SetText(text).
-		SetTextColor(tcell.ColorDarkGray).
+		SetTextColor(theme.TextDim).
 		SetTextAlign(tview.AlignCenter)
 	statusBar.SetBorder(false)
 	return statusBar
 }
 
 func CreateFileListWrapper(fileList *tview.List) *tview.Frame {
+	title := "[" + theme.HexPrimary + "]Files[" + theme.HexText + "]"
 	fileListWrapper := tview.NewFrame(fileList).
-		AddText(" [red]Files[white] ", true, tview.AlignLeft, tcell.ColorRed).
-		AddText("", false, tview.AlignLeft, tcell.ColorWhite)
+		AddText(title, true, tview.AlignLeft, theme.Primary).
+		AddText("", false, tview.AlignLeft, theme.Text)
 	fileListWrapper.SetBorder(true).SetTitle("Files")
 	return fileListWrapper
 }
 
 func CreateFormWrapper(form *tview.Form, title string) *tview.Frame {
+	coloredTitle := "[" + theme.HexPrimary + "]" + title + "[" + theme.HexText + "]"
 	formWrapper := tview.NewFrame(form).
-		AddText(" [green]"+title+"[white] ", true, tview.AlignLeft, tcell.ColorGreen).
-		AddText("", false, tview.AlignLeft, tcell.ColorWhite)
-	formWrapper.SetBorder(true)
+		AddText(" "+coloredTitle+" ", true, tview.AlignLeft, theme.Primary).
+		AddText("", false, tview.AlignLeft, theme.Text)
 	return formWrapper
 }

@@ -23,9 +23,9 @@ func Load(list *tview.List, dir string) string {
 
 	for _, file := range files {
 		if file.IsDir() {
-			list.AddItem(file.Name()+"/", "Directory", 0, nil)
+			list.AddItem(file.Name()+"/", " Directory", 0, nil)
 		} else if strings.HasSuffix(strings.ToLower(file.Name()), ".mp3") {
-			list.AddItem(file.Name(), "MP3 file", 0, nil)
+			list.AddItem(file.Name(), " MP3 file", 0, nil)
 		}
 	}
 
