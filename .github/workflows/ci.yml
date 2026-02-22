@@ -1,0 +1,86 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run tests
+        run: go test ./...
+
+  build:
+    runs-on: ubuntu-24.04
+    needs: [format, test]
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: arm
+          - goos: windows
+            goarch: amd64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          BINARY_NAME=id3v2-tui-${{ matrix.goos }}-${{ matrix.goarch }}
+          go build -ldflags="-s -w" -o "build/${BINARY_NAME}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: id3v2-tui-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: build/id3v2-tui-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-binaries
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="v$(date +%Y.%m.%d)-${GITHUB_SHA:0:7}"
+          gh release create "${VERSION}" \
+            --title "Release ${VERSION}" \
+            --generate-notes \
+            release-binaries/*
