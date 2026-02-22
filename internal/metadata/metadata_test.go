@@ -1,13 +1,13 @@
-package main
+package metadata
 
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/bogem/id3v2"
+
+	"id3v2-tui/internal/commands"
 )
 
 const testFile = "test/test.mp3"
@@ -50,26 +50,26 @@ func TestReadMetadata(t *testing.T) {
 	clearMetadata(t)
 	setTestMetadata(t, "Test Song", "Test Artist", "Test Album")
 
-	app := &App{}
-	err := app.readMetadata(testFile)
+	executor := commands.NewExecutor()
+	meta, err := Read(executor, testFile)
 	if err != nil {
-		t.Fatalf("readMetadata failed: %v", err)
+		t.Fatalf("Read failed: %v", err)
 	}
 
-	if app.metadata == nil {
+	if meta == nil {
 		t.Fatal("metadata is nil")
 	}
 
-	if app.metadata.TrackName != "Test Song" {
-		t.Errorf("expected track name 'Test Song', got '%s'", app.metadata.TrackName)
+	if meta.TrackName != "Test Song" {
+		t.Errorf("expected track name 'Test Song', got '%s'", meta.TrackName)
 	}
 
-	if app.metadata.Artist != "Test Artist" {
-		t.Errorf("expected artist 'Test Artist', got '%s'", app.metadata.Artist)
+	if meta.Artist != "Test Artist" {
+		t.Errorf("expected artist 'Test Artist', got '%s'", meta.Artist)
 	}
 
-	if app.metadata.Album != "Test Album" {
-		t.Errorf("expected album 'Test Album', got '%s'", app.metadata.Album)
+	if meta.Album != "Test Album" {
+		t.Errorf("expected album 'Test Album', got '%s'", meta.Album)
 	}
 
 	clearMetadata(t)
@@ -79,35 +79,33 @@ func TestSaveMetadata(t *testing.T) {
 	setupTestFile(t)
 	clearMetadata(t)
 
-	app := &App{
-		metadata: &Metadata{
-			TrackName: "Saved Song",
-			Artist:    "Saved Artist",
-			Album:     "Saved Album",
-		},
+	executor := commands.NewExecutor()
+	meta := &Metadata{
+		TrackName: "Saved Song",
+		Artist:    "Saved Artist",
+		Album:     "Saved Album",
 	}
 
-	err := app.saveMetadata(testFile)
+	err := Save(executor, testFile, meta)
 	if err != nil {
-		t.Fatalf("saveMetadata failed: %v", err)
+		t.Fatalf("Save failed: %v", err)
 	}
 
-	app2 := &App{}
-	err = app2.readMetadata(testFile)
+	readMeta, err := Read(executor, testFile)
 	if err != nil {
-		t.Fatalf("readMetadata after save failed: %v", err)
+		t.Fatalf("Read after save failed: %v", err)
 	}
 
-	if app2.metadata.TrackName != "Saved Song" {
-		t.Errorf("expected 'Saved Song', got '%s'", app2.metadata.TrackName)
+	if readMeta.TrackName != "Saved Song" {
+		t.Errorf("expected 'Saved Song', got '%s'", readMeta.TrackName)
 	}
 
-	if app2.metadata.Artist != "Saved Artist" {
-		t.Errorf("expected 'Saved Artist', got '%s'", app2.metadata.Artist)
+	if readMeta.Artist != "Saved Artist" {
+		t.Errorf("expected 'Saved Artist', got '%s'", readMeta.Artist)
 	}
 
-	if app2.metadata.Album != "Saved Album" {
-		t.Errorf("expected 'Saved Album', got '%s'", app2.metadata.Album)
+	if readMeta.Album != "Saved Album" {
+		t.Errorf("expected 'Saved Album', got '%s'", readMeta.Album)
 	}
 
 	clearMetadata(t)
@@ -117,32 +115,19 @@ func TestSaveEmptyMetadata(t *testing.T) {
 	setupTestFile(t)
 	clearMetadata(t)
 
-	app := &App{
-		metadata: &Metadata{
-			TrackName: "",
-			Artist:    "",
-			Album:     "",
-		},
+	executor := commands.NewExecutor()
+	meta := &Metadata{
+		TrackName: "",
+		Artist:    "",
+		Album:     "",
 	}
 
-	err := app.saveMetadata(testFile)
+	err := Save(executor, testFile, meta)
 	if err != nil {
-		t.Fatalf("saveMetadata with empty fields failed: %v", err)
+		t.Fatalf("Save with empty fields failed: %v", err)
 	}
 
 	clearMetadata(t)
-}
-
-func TestLoadFiles(t *testing.T) {
-	if _, err := os.Stat("test"); os.IsNotExist(err) {
-		t.Skip("test directory not found")
-	}
-
-	app := &App{}
-	app.fileList = nil
-	app.currentDir = ""
-
-	_ = app
 }
 
 func TestParseFfprobeOutput(t *testing.T) {
@@ -221,48 +206,5 @@ func TestParseFfprobeOutput(t *testing.T) {
 				t.Errorf("Album: expected '%s', got '%s'", tt.expected.Album, result.Album)
 			}
 		})
-	}
-}
-
-func TestFilePathOperations(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"test.mp3", "test.mp3"},
-		{"/path/to/test.mp3", "test.mp3"},
-		{"../test.mp3", "test.mp3"},
-		{"/path/to/file", "file"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := filepath.Base(tt.input)
-			if result != tt.expected {
-				t.Errorf("expected '%s', got '%s'", tt.expected, result)
-			}
-		})
-	}
-}
-
-func TestRunCommand(t *testing.T) {
-	app := &App{}
-
-	output, err := app.runCommand("echo", "hello")
-	if err != nil {
-		t.Fatalf("runCommand failed: %v", err)
-	}
-
-	if !strings.Contains(output, "hello") {
-		t.Errorf("expected 'hello' in output, got '%s'", output)
-	}
-}
-
-func TestRunCommandError(t *testing.T) {
-	app := &App{}
-
-	_, err := app.runCommand("nonexistent-command-xyz")
-	if err == nil {
-		t.Fatal("expected error for nonexistent command")
 	}
 }
