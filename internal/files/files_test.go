@@ -3,6 +3,7 @@ package files
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rivo/tview"
@@ -111,5 +112,72 @@ func TestFilePathOperations(t *testing.T) {
 				t.Errorf("expected '%s', got '%s'", tt.expected, result)
 			}
 		})
+	}
+}
+
+func TestLoadWithTestDirectory(t *testing.T) {
+	testDir := "../../test"
+	if _, err := os.Stat(testDir); os.IsNotExist(err) {
+		t.Skip("test directory not found")
+	}
+
+	list := tview.NewList()
+	dir := Load(list, testDir)
+
+	if dir != testDir {
+		t.Errorf("expected dir '%s', got '%s'", testDir, dir)
+	}
+
+	count := list.GetItemCount()
+	if count == 0 {
+		t.Error("expected items in list, got 0")
+	}
+
+	foundMP3 := false
+	for i := 0; i < count; i++ {
+		mainText, _ := list.GetItemText(i)
+		if strings.HasSuffix(mainText, ".mp3") {
+			foundMP3 = true
+			break
+		}
+	}
+	if !foundMP3 {
+		t.Error("expected to find at least one .mp3 file in test directory")
+	}
+}
+
+func TestLoadWithNonExistentDirectory(t *testing.T) {
+	list := tview.NewList()
+	dir := Load(list, "/nonexistent/directory")
+
+	if dir != "/nonexistent/directory" {
+		t.Errorf("expected original dir to be returned, got '%s'", dir)
+	}
+}
+
+func TestLoadParentDirectory(t *testing.T) {
+	testDir := "../../test"
+	if _, err := os.Stat(testDir); os.IsNotExist(err) {
+		t.Skip("test directory not found")
+	}
+
+	list := tview.NewList()
+	Load(list, testDir)
+
+	count := list.GetItemCount()
+	if count == 0 {
+		t.Error("expected items in list")
+	}
+
+	hasParentDir := false
+	for i := 0; i < count; i++ {
+		mainText, _ := list.GetItemText(i)
+		if mainText == ".." {
+			hasParentDir = true
+			break
+		}
+	}
+	if !hasParentDir {
+		t.Error("expected '..' entry for non-root directory")
 	}
 }

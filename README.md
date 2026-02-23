@@ -44,7 +44,13 @@ go build -o ./build/id3v2-tui
 ## Testing
 
 ```bash
-go test .
+go test ./... -v
+```
+
+Run w/ coverage
+
+```bash
+go test ./... -coverprofile=coverage.out; go tool cover -func=coverage.out
 ```
 
 Tests require a `test/test.mp3` file for metadata operations.
