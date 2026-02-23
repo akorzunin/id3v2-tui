@@ -10,7 +10,7 @@ import (
 	"id3v2-tui/internal/theme"
 )
 
-type SaveCallback func(filePath, trackName, artist, album, coverPath string) error
+type SaveCallback func(filePath, trackName, artist, album, coverPath string) (string, error)
 type GetRootFunc func() tview.Primitive
 type ShowErrorFunc func(msg string)
 type ShowMessageFunc func(msg string)
@@ -84,11 +84,13 @@ func CreateMetadataForm(directMode bool, ctx *UIContext) *tview.Form {
 		album := form.GetFormItemByLabel("Album").(*tview.InputField).GetText()
 		coverPath := form.GetFormItemByLabel("Cover Image Path").(*tview.InputField).GetText()
 
-		err := ctx.SaveMetadata(filePath, trackName, artist, album, coverPath)
+		diff, err := ctx.SaveMetadata(filePath, trackName, artist, album, coverPath)
 		if err != nil {
 			ctx.ShowError(err.Error())
+		} else if diff != "" {
+			ctx.ShowMessage("Metadata saved successfully!\n\n" + diff)
 		} else {
-			ctx.ShowMessage("Metadata saved successfully!")
+			ctx.ShowMessage("No changes detected")
 		}
 	})
 

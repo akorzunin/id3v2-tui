@@ -16,6 +16,33 @@ type Metadata struct {
 	CoverPath string
 }
 
+func formatValue(v string) string {
+	if v == "" {
+		return "(empty)"
+	}
+	return v
+}
+
+func (m *Metadata) Diff(other *Metadata) string {
+	var changes []string
+
+	if m.TrackName != other.TrackName {
+		changes = append(changes, fmt.Sprintf("Track: %s → %s", formatValue(m.TrackName), formatValue(other.TrackName)))
+	}
+	if m.Artist != other.Artist {
+		changes = append(changes, fmt.Sprintf("Artist: %s → %s", formatValue(m.Artist), formatValue(other.Artist)))
+	}
+	if m.Album != other.Album {
+		changes = append(changes, fmt.Sprintf("Album: %s → %s", formatValue(m.Album), formatValue(other.Album)))
+	}
+
+	if len(changes) == 0 {
+		return ""
+	}
+
+	return strings.Join(changes, "\n")
+}
+
 func Read(filePath string) (*Metadata, error) {
 	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
 	if err != nil {

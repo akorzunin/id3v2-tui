@@ -15,20 +15,22 @@ import (
 )
 
 type App struct {
-	app         *tview.Application
-	fileList    *tview.List
-	form        *tview.Form
-	pages       *tview.Pages
-	root        tview.Primitive
-	meta        *metadata.Metadata
-	currentDir  string
-	currentFile string
-	focusIndex  int
+	app          *tview.Application
+	fileList     *tview.List
+	form         *tview.Form
+	pages        *tview.Pages
+	root         tview.Primitive
+	meta         *metadata.Metadata
+	originalMeta *metadata.Metadata
+	currentDir   string
+	currentFile  string
+	focusIndex   int
 }
 
 func NewApp() *App {
 	return &App{
-		meta: &metadata.Metadata{},
+		meta:         &metadata.Metadata{},
+		originalMeta: &metadata.Metadata{},
 	}
 }
 
@@ -68,12 +70,23 @@ func (a *App) setFocusIndex(idx int) {
 	a.focusIndex = idx
 }
 
-func (a *App) saveMetadata(filePath, trackName, artist, album, coverPath string) error {
-	a.meta.TrackName = trackName
-	a.meta.Artist = artist
-	a.meta.Album = album
-	a.meta.CoverPath = coverPath
-	return metadata.Save(filePath, a.meta)
+func (a *App) saveMetadata(filePath, trackName, artist, album, coverPath string) (string, error) {
+	newMeta := &metadata.Metadata{
+		TrackName: trackName,
+		Artist:    artist,
+		Album:     album,
+		CoverPath: coverPath,
+	}
+
+	diff := a.originalMeta.Diff(newMeta)
+
+	err := metadata.Save(filePath, newMeta)
+	if err != nil {
+		return "", err
+	}
+
+	a.meta = newMeta
+	return diff, nil
 }
 
 func (a *App) readMetadata(filePath string) error {
@@ -141,6 +154,13 @@ func (a *App) Run(filePath string) error {
 			return
 		}
 
+		a.originalMeta = &metadata.Metadata{
+			TrackName: a.meta.TrackName,
+			Artist:    a.meta.Artist,
+			Album:     a.meta.Album,
+			CoverPath: a.meta.CoverPath,
+		}
+
 		ui.PopulateForm(a.form, a.meta.TrackName, a.meta.Artist, a.meta.Album, a.meta.CoverPath)
 
 		a.focusIndex = 1
@@ -174,6 +194,13 @@ func (a *App) runDirectEdit(filePath string) error {
 	a.currentDir = filepath.Dir(absPath)
 
 	a.readMetadata(absPath)
+
+	a.originalMeta = &metadata.Metadata{
+		TrackName: a.meta.TrackName,
+		Artist:    a.meta.Artist,
+		Album:     a.meta.Album,
+		CoverPath: a.meta.CoverPath,
+	}
 
 	ctx := &ui.UIContext{
 		App:           a.app,
