@@ -14,20 +14,6 @@ A terminal user interface for editing ID3v2 metadata tags on MP3 files.
 ## Requirements
 
 - Go 1.25+
-- `ffmpeg` (includes ffprobe, for reading metadata and embedding cover art)
-
-### Installing Dependencies
-
-```bash
-# archlinux
-pacman -S ffmpeg
-
-# On Debian/Ubuntu
-sudo apt install ffmpeg
-
-# On macOS
-brew install ffmpeg
-```
 
 ## Build
 

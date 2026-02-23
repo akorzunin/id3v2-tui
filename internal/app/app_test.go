@@ -36,7 +36,4 @@ func TestNewApp(t *testing.T) {
 	if app.meta == nil {
 		t.Error("app.meta is nil")
 	}
-	if app.executor == nil {
-		t.Error("app.executor is nil")
-	}
 }

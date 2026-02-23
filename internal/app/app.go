@@ -8,7 +8,6 @@ import (
 
 	"github.com/rivo/tview"
 
-	"id3v2-tui/internal/commands"
 	"id3v2-tui/internal/files"
 	"id3v2-tui/internal/metadata"
 	"id3v2-tui/internal/modals"
@@ -22,7 +21,6 @@ type App struct {
 	pages       *tview.Pages
 	root        tview.Primitive
 	meta        *metadata.Metadata
-	executor    commands.Executor
 	currentDir  string
 	currentFile string
 	focusIndex  int
@@ -30,8 +28,7 @@ type App struct {
 
 func NewApp() *App {
 	return &App{
-		meta:     &metadata.Metadata{},
-		executor: commands.NewExecutor(),
+		meta: &metadata.Metadata{},
 	}
 }
 
@@ -76,11 +73,11 @@ func (a *App) saveMetadata(filePath, trackName, artist, album, coverPath string)
 	a.meta.Artist = artist
 	a.meta.Album = album
 	a.meta.CoverPath = coverPath
-	return metadata.Save(a.executor, filePath, a.meta)
+	return metadata.Save(filePath, a.meta)
 }
 
 func (a *App) readMetadata(filePath string) error {
-	meta, err := metadata.Read(a.executor, filePath)
+	meta, err := metadata.Read(filePath)
 	if err != nil {
 		a.meta = &metadata.Metadata{}
 		return nil
@@ -219,14 +216,6 @@ func (a *App) GetMetadata() *metadata.Metadata {
 
 func (a *App) SetMetadata(m *metadata.Metadata) {
 	a.meta = m
-}
-
-func (a *App) GetExecutor() commands.Executor {
-	return a.executor
-}
-
-func (a *App) SetExecutor(e commands.Executor) {
-	a.executor = e
 }
 
 func IsMP3File(filename string) bool {

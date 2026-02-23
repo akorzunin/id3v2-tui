@@ -1,13 +1,12 @@
 package metadata
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bogem/id3v2"
-
-	"id3v2-tui/internal/commands"
 )
 
 type Metadata struct {
@@ -17,52 +16,35 @@ type Metadata struct {
 	CoverPath string
 }
 
-type ffprobeFormat struct {
-	Tags struct {
-		Title  string `json:"title"`
-		Artist string `json:"artist"`
-		Album  string `json:"album"`
-	} `json:"tags"`
-}
-
-type ffprobeOutput struct {
-	Format ffprobeFormat `json:"format"`
-}
-
-func Read(executor commands.Executor, filePath string) (*Metadata, error) {
-	output, err := executor.Run("ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", filePath)
+func Read(filePath string) (*Metadata, error) {
+	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
 	if err != nil {
 		return &Metadata{}, nil
 	}
-
-	var probe ffprobeOutput
-	if err := json.Unmarshal([]byte(output), &probe); err != nil {
-		return &Metadata{}, nil
-	}
+	defer tag.Close()
 
 	return &Metadata{
-		TrackName: probe.Format.Tags.Title,
-		Artist:    probe.Format.Tags.Artist,
-		Album:     probe.Format.Tags.Album,
+		TrackName: tag.Title(),
+		Artist:    tag.Artist(),
+		Album:     tag.Album(),
 	}, nil
 }
 
-func Save(executor commands.Executor, filePath string, meta *Metadata) error {
-	if meta.CoverPath != "" {
-		_, err := executor.Run("ffmpeg", "-i", filePath, "-i", meta.CoverPath,
-			"-map", "0:0", "-map", "1:0", "-c:v", "copy", "-id3v2_version", "3",
-			"-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)",
-			"-metadata", "title="+meta.TrackName,
-			"-metadata", "artist="+meta.Artist,
-			"-metadata", "album="+meta.Album,
-			"-c:a", "copy", "-y", filePath+".tmp.mp3")
-		if err != nil {
-			return fmt.Errorf("failed to set cover: %w", err)
-		}
-		os.Rename(filePath+".tmp.mp3", filePath)
-		return nil
+func getMimeType(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	default:
+		return "image/jpeg"
 	}
+}
 
+func Save(filePath string, meta *Metadata) error {
 	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
@@ -77,6 +59,22 @@ func Save(executor commands.Executor, filePath string, meta *Metadata) error {
 	}
 	if meta.Album != "" {
 		tag.SetAlbum(meta.Album)
+	}
+
+	if meta.CoverPath != "" {
+		artwork, err := os.ReadFile(meta.CoverPath)
+		if err != nil {
+			return fmt.Errorf("failed to read cover file: %w", err)
+		}
+
+		pic := id3v2.PictureFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			MimeType:    getMimeType(meta.CoverPath),
+			PictureType: id3v2.PTFrontCover,
+			Description: "Front cover",
+			Picture:     artwork,
+		}
+		tag.AddAttachedPicture(pic)
 	}
 
 	if err := tag.Save(); err != nil {
